@@ -122,19 +122,35 @@ if supabase_url:
             raise ValueError("SUPABASE_URL missing hostname after parsing")
         
         print(f"Creating database engine (host: {parsed.hostname}, port: {parsed.port or 5432}, database: {parsed.path.lstrip('/') or 'postgres'})")
+        
+        # Check if using direct connection (port 5432) - recommend connection pooler for better compatibility
+        if parsed.port == 5432:
+            print("⚠️  Using direct connection (port 5432). For better compatibility with Render, consider using connection pooler (port 6543)")
+            print("   Get connection pooler URL from Supabase Dashboard → Settings → Database → Connection pooling")
     except Exception as e:
         raise ValueError(
             f"Invalid SUPABASE_URL format: {str(e)}\n"
             f"Expected format: postgresql://postgres:password@host:5432/postgres\n"
             f"Your URL starts with: {original_url[:30]}...\n"
             f"Please check your Render environment variables. Common issues:\n"
-            f"1. Missing port (should be :5432)\n"
+            f"1. Missing port (should be :5432 or :6543 for connection pooling)\n"
             f"2. Missing database name (should end with /postgres)\n"
             f"3. Incorrect format\n"
-            f"Get the correct connection string from Supabase Dashboard → Settings → Database → Connection string (URI format)"
+            f"Get the correct connection string from Supabase Dashboard → Settings → Database → Connection string (URI format)\n"
+            f"⚠️  For Render, use Connection Pooling (port 6543) instead of Direct connection (port 5432) for better network compatibility"
         ) from e
     
-    engine = create_engine(supabase_url)
+    # Create engine with connection pool settings for better reliability
+    # Add connect_args to handle IPv6/IPv4 issues
+    engine = create_engine(
+        supabase_url,
+        pool_pre_ping=True,  # Verify connections before using
+        pool_recycle=300,    # Recycle connections after 5 minutes
+        connect_args={
+            "connect_timeout": 10,  # 10 second connection timeout
+            "options": "-c statement_timeout=30000"  # 30 second query timeout
+        }
+    )
 elif os.getenv("DATABASE_URL"):
     print("Using DATABASE_URL connection string")
     database_url = os.getenv("DATABASE_URL")

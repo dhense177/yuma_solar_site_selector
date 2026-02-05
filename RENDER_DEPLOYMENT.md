@@ -100,10 +100,12 @@ SUPABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:
 **How to get the correct connection string:**
 1. Go to Supabase Dashboard → Your Project
 2. Go to **Settings** → **Database**
-3. Scroll to **Connection string** section
-4. Copy the **URI** connection string (not Session mode or Transaction mode)
+3. Scroll to **Connection pooling** section (NOT "Connection string")
+4. Copy the **URI** connection string from Connection pooling
 5. It should look like: `postgresql://postgres.xxxxx:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres`
-6. **Note:** If using connection pooling (port 6543), that's fine. If using direct connection (port 5432), that's also fine.
+6. **⚠️ IMPORTANT:** Use **Connection Pooling** (port 6543), NOT direct connection (port 5432)
+   - Connection pooling works better with Render (avoids IPv6 network issues)
+   - Direct connection may fail with "Network is unreachable" errors
 
 **Option 2: Individual Database Variables**
 
@@ -223,10 +225,22 @@ If you're on the free tier, you can use a service like [cron-job.org](https://cr
 
 ### Database Connection Issues
 
+**Error: "Network is unreachable" or IPv6 connection errors**
+
+This is a common issue when using Supabase direct connection (port 5432) with Render.
+
+**Solution: Use Connection Pooling**
+1. Go to Supabase Dashboard → Settings → Database
+2. Use **Connection pooling** connection string (port 6543), NOT direct connection
+3. Connection pooler URL format: `postgresql://postgres.xxxxx:password@aws-0-us-east-1.pooler.supabase.com:6543/postgres`
+4. Update `SUPABASE_URL` in Render with the pooler URL
+5. See `SUPABASE_CONNECTION_FIX.md` for detailed instructions
+
 **If using Supabase:**
 - Make sure `SUPABASE_URL` is set correctly
+- **Use connection pooling (port 6543) for Render** - direct connection (port 5432) may have network issues
 - Check that your Supabase project allows connections from Render's IPs
-- Verify the connection string format: `postgresql://postgres:password@host:5432/postgres`
+- Verify the connection string format includes port and database name
 
 ### Timeout Errors
 
