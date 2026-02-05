@@ -116,39 +116,90 @@ const ChatInterface = ({ onParcelsFound }: ChatInterfaceProps) => {
       const decoder = new TextDecoder();
       let buffer = '';
       let data: any = null;
+      const HEARTBEAT_TIMEOUT = 90000; // 90 seconds without data = timeout
+      let lastDataTime = Date.now();
+      let streamTimeoutId: NodeJS.Timeout | null = null;
+      let streamTimedOut = false;
 
       if (!reader) {
         throw new Error('Response body is not readable');
       }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      // Helper to reset timeout
+      const resetTimeout = () => {
+        if (streamTimeoutId) {
+          clearTimeout(streamTimeoutId);
+        }
+        lastDataTime = Date.now();
+        streamTimeoutId = setTimeout(() => {
+          streamTimedOut = true;
+          reader.cancel();
+          console.error('Stream timeout - no data received for 90 seconds');
+        }, HEARTBEAT_TIMEOUT);
+      };
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+      // Start initial timeout
+      resetTimeout();
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const jsonStr = line.slice(6);
-              const event = JSON.parse(jsonStr);
-              
-              if (event.type === 'status') {
-                // Update current step
-                setCurrentStep(event.step);
-              } else if (event.type === 'result') {
-                // Final result received
-                data = event;
-              } else if (event.type === 'error') {
-                throw new Error(event.error);
+      try {
+        while (true) {
+          if (streamTimedOut) {
+            throw new Error('Stream timeout - no data received for 90 seconds. Possible causes:\n1. Render free tier spin-down (first request after inactivity takes ~30 seconds)\n2. Backend processing taking too long\n3. Database query timeout\n4. LLM API timeout\n\nCheck Render logs for backend errors.');
+          }
+
+          const { done, value } = await reader.read();
+          
+          if (done) {
+            clearTimeout(streamTimeoutId!);
+            break;
+          }
+          
+          // Reset timeout on data received
+          resetTimeout();
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const jsonStr = line.slice(6);
+                const event = JSON.parse(jsonStr);
+                
+                if (event.type === 'status') {
+                  // Update current step
+                  setCurrentStep(event.step);
+                  console.log('Status update:', event.step);
+                } else if (event.type === 'result') {
+                  // Final result received
+                  data = event;
+                  clearTimeout(streamTimeoutId!);
+                  break; // Exit loop when result received
+                } else if (event.type === 'error') {
+                  clearTimeout(streamTimeoutId!);
+                  throw new Error(event.error);
+                }
+              } catch (e) {
+                console.error('Error parsing SSE event:', e);
               }
-            } catch (e) {
-              console.error('Error parsing SSE event:', e);
             }
           }
+          
+          // If we got the result, break out of the while loop
+          if (data) break;
         }
+        
+        // Clear timeout when done
+        if (streamTimeoutId) {
+          clearTimeout(streamTimeoutId);
+        }
+      } catch (streamError) {
+        if (streamTimeoutId) {
+          clearTimeout(streamTimeoutId);
+        }
+        // Re-throw the error
+        throw streamError;
       }
 
       // Process remaining buffer
@@ -165,7 +216,11 @@ const ChatInterface = ({ onParcelsFound }: ChatInterfaceProps) => {
       }
 
       if (!data) {
-        throw new Error('No data received from server');
+        // Check if we got any status updates
+        if (currentStep) {
+          throw new Error(`Query started but did not complete. Last status: "${currentStep}". This may indicate:\n1. Render free tier spin-down (first request after inactivity takes ~30 seconds)\n2. Backend timeout or error\n3. Database query taking too long\n\nCheck Render logs for more details.`);
+        }
+        throw new Error('No data received from server. The backend may not be responding. Check if Render service is running.');
       }
 
       console.log('Response from API:', data);

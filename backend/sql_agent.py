@@ -170,7 +170,22 @@ def get_all_tables_schema(_):
     
     return "\n\n".join(all_tables_info)
 
-SCHEMA_TEXT = get_all_tables_schema("")
+# Lazy-load schema to avoid connection errors at import time
+_SCHEMA_TEXT_CACHE = None
+
+def get_schema_text():
+    """Get schema text, caching it after first call"""
+    global _SCHEMA_TEXT_CACHE
+    if _SCHEMA_TEXT_CACHE is None:
+        try:
+            _SCHEMA_TEXT_CACHE = get_all_tables_schema("")
+        except Exception as e:
+            print(f"Error: Could not load schema: {e}")
+            raise RuntimeError(f"Database connection failed. Please check your SUPABASE_URL environment variable. Error: {e}")
+    return _SCHEMA_TEXT_CACHE
+
+# Don't load schema at import time - load it lazily when needed
+SCHEMA_TEXT = None  # Will be loaded on first use via get_schema_text()
 
 # --- HELPER FUNCTIONS ---
 def clean_sql(sql: str) -> str:
@@ -342,7 +357,7 @@ def resolve_vague_conditions(state: SQLState):
     - "Parcels over 20 acres" → CLEAR (has specific size)
     - "In Worcester county" → CLEAR (has specific location)
     
-    Schema information: {SCHEMA_TEXT}
+    Schema information: {schema_text}
     
     Respond ONLY as JSON in this format (only include vague conditions that actually exist in the user query):
     {{{{
@@ -374,7 +389,8 @@ def resolve_vague_conditions(state: SQLState):
     chain = prompt_template | llm | parser
     
     try:
-        result = chain.invoke({"SCHEMA_TEXT": SCHEMA_TEXT, "user_query": user_query})
+        schema_text = get_schema_text()
+        result = chain.invoke({"SCHEMA_TEXT": schema_text, "user_query": user_query})
         # JsonOutputParser should return a dict, but check if it's an AIMessage
         if hasattr(result, 'content'):
             # It's an AIMessage, parse the content
@@ -394,7 +410,8 @@ def resolve_vague_conditions(state: SQLState):
         # Fallback: try direct LLM call with manual JSON parsing
         try:
             # Format the prompt with actual values
-            formatted_prompt = prompt_template_str.format(SCHEMA_TEXT=SCHEMA_TEXT, user_query=user_query)
+            schema_text = get_schema_text()
+            formatted_prompt = prompt_template_str.format(SCHEMA_TEXT=schema_text, user_query=user_query)
             response = llm.invoke(formatted_prompt)
             # Extract content if it's an AIMessage
             if hasattr(response, 'content'):
@@ -483,7 +500,8 @@ def generate_sql(state: SQLState):
         ]
     )
     chain = prompt | llm | StrOutputParser()
-    response = chain.invoke({"tables": SCHEMA_TEXT, "user_query": expanded_query})
+    schema_text = get_schema_text()
+    response = chain.invoke({"tables": schema_text, "user_query": expanded_query})
     
     sql = clean_sql(response)
     # sql = ensure_geometry_as_geojson(sql)
@@ -514,7 +532,9 @@ def check_unmatched_conditions(state: SQLState):
     sql_query = state.get("sql_query", "")
     results = state.get("results", [])
     
-    check_prompt = f"""
+    schema_text = get_schema_text()
+    
+    check_prompt = """
     Analyze the user's query and identify any filtering conditions that request features NOT available in the database.
     
     User's original query: "{user_query}"
@@ -562,7 +582,12 @@ def check_unmatched_conditions(state: SQLState):
     chain = prompt_template | llm | parser
     
     try:
-        result = chain.invoke({})
+        result = chain.invoke({
+            "SCHEMA_TEXT": schema_text,
+            "user_query": user_query,
+            "expanded_query": expanded_query,
+            "sql_query": sql_query
+        })
         # Handle both dict and AIMessage
         if hasattr(result, 'content'):
             import json

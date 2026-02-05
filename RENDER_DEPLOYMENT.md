@@ -20,16 +20,18 @@ Your backend is already set up! The files you need are:
 - `backend/requirements.txt` or `pyproject.toml` - Dependencies
 - `backend/Procfile` - Already created for you
 
-### Step 2: Create requirements.txt (if needed)
+### Step 2: Use requirements.txt
 
-If you're using `pyproject.toml`, Render can use it, but you can also create a `requirements.txt` in the `backend/` directory:
+**Important:** Since `pyproject.toml` is in the root directory and Render's root directory is set to `backend`, you **must use `requirements.txt`** instead of `pip install -e .`.
+
+The `requirements.txt` file is already created in the `backend/` directory. If you need to regenerate it:
 
 ```bash
 cd backend
 pip freeze > requirements.txt
 ```
 
-Or create it manually with your dependencies:
+Or use the existing file with these dependencies:
 
 ```txt
 fastapi>=0.115.0
@@ -68,8 +70,8 @@ python-multipart>=0.0.6
    - **Branch**: `main` (or your default branch)
    - **Root Directory**: `backend` ⚠️ **Important!**
    - **Runtime**: `Python 3`
-   - **Build Command**: `pip install -e .` or `pip install -r requirements.txt`
-   - **Start Command**: `python api_server.py` or `uvicorn api_server:api_app --host 0.0.0.0 --port $PORT`
+   - **Build Command**: `pip install -r requirements.txt` ⚠️ **Use this, not `pip install -e .`**
+   - **Start Command**: `python api_server.py`
 
    **Advanced Settings (optional):**
    - **Auto-Deploy**: `Yes` (deploys on every push to main)
@@ -160,10 +162,16 @@ If you're on the free tier, you can use a service like [cron-job.org](https://cr
 
 ### Build Fails
 
+**Error: "file:///opt/render/project/src/backend does not appear to be a Python project: neither 'setup.py' nor 'pyproject.toml' found"**
+- ✅ **Solution**: Use `pip install -r requirements.txt` as the Build Command (NOT `pip install -e .`)
+- Make sure `requirements.txt` exists in the `backend/` directory
+- The `pyproject.toml` is in the root, so `pip install -e .` won't work from the backend directory
+
 **Error: "Module not found"**
 - Make sure `Root Directory` is set to `backend`
-- Check that `requirements.txt` or `pyproject.toml` is in the `backend/` directory
-- Verify all dependencies are listed
+- Check that `requirements.txt` is in the `backend/` directory
+- Verify all dependencies are listed in `requirements.txt`
+- Use Build Command: `pip install -r requirements.txt`
 
 **Error: "Command not found: python"**
 - Try `python3` instead of `python` in Start Command
