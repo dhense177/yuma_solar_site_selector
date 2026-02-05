@@ -1,16 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import OnboardingModal from "@/components/OnboardingModal";
 import AvailableFeaturesModal from "@/components/AvailableFeaturesModal";
 import ChatInterface from "@/components/ChatInterface";
-import MapView from "@/components/MapView";
 import { HelpCircle } from "lucide-react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+
+// Dynamically import MapView with SSR disabled since it uses Leaflet (browser-only)
+const MapView = dynamic(() => import("@/components/MapView"), {
+  ssr: false,
+});
 
 interface Parcel {
   address: string;
@@ -34,14 +39,18 @@ export default function Home() {
   const [selectedParcel, setSelectedParcel] = useState<Parcel | null>(null);
 
   useEffect(() => {
-    const hasSeenOnboarding = localStorage.getItem("hasSeenOnboarding");
-    if (hasSeenOnboarding) {
-      setShowOnboarding(false);
+    if (typeof window !== 'undefined') {
+      const hasSeenOnboarding = localStorage.getItem("hasSeenOnboarding");
+      if (hasSeenOnboarding) {
+        setShowOnboarding(false);
+      }
     }
   }, []);
 
   const handleCloseOnboarding = () => {
-    localStorage.setItem("hasSeenOnboarding", "true");
+    if (typeof window !== 'undefined') {
+      localStorage.setItem("hasSeenOnboarding", "true");
+    }
     setShowOnboarding(false);
   };
 

@@ -77,15 +77,15 @@ const OnboardingModal = ({ isOpen, onClose }: OnboardingModalProps) => {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-0.5">•</span>
-                <span>"Search for 25+ acre parcels within 1 km of substations in Pittsfield, MA"</span>
+                <span>&quot;Search for 25+ acre parcels within 1 km of substations in Pittsfield, MA&quot;</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-0.5">•</span>
-                <span>"Find parcels with at least 50 MW of ground-mount capacity in Worcester county"</span>
+                <span>&quot;Find parcels with at least 50 MW of ground-mount capacity in Worcester county&quot;</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-0.5">•</span>
-                <span>"Find me 20+ acre sites within industrial zones in Franklin County"</span>
+                <span>&quot;Find me 20+ acre sites within industrial zones in Franklin County&quot;</span>
               </li>
             </ul>
           </div>

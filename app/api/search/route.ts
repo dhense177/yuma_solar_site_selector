@@ -8,6 +8,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     
+    // Log the backend URL for debugging
+    console.log(`[API Route] Proxying request to backend: ${BACKEND_URL}/api/search`)
+    
     // Forward the request to your backend API
     const response = await fetch(`${BACKEND_URL}/api/search`, {
       method: 'POST',
@@ -15,6 +18,8 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
+      // Add timeout and better error handling
+      signal: AbortSignal.timeout(300000), // 5 minute timeout
     })
 
     if (!response.ok) {
@@ -67,9 +72,43 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data)
   } catch (error: any) {
     console.error('API route error:', error)
+    
+    // Provide more helpful error messages
+    let errorMessage = 'Internal server error'
+    let statusCode = 500
+    
+    if (error.name === 'AbortError' || error.message?.includes('timeout')) {
+      errorMessage = 'Request timeout - the backend server may be slow or unresponsive'
+      statusCode = 504
+    } else if (error.message?.includes('fetch failed') || error.code === 'ECONNREFUSED') {
+      errorMessage = `Cannot connect to backend server at ${BACKEND_URL}. Make sure the backend is running on port 8000.`
+      statusCode = 503
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
+    console.error(`[API Route] Error details:`, {
+      message: errorMessage,
+      backendUrl: BACKEND_URL,
+      errorType: error.name,
+      errorCode: error.code
+    })
+    
+    // Provide helpful details for production
+    let details: string | undefined = undefined;
+    if (process.env.NODE_ENV === 'development') {
+      details = `Backend URL: ${BACKEND_URL}. Check that the backend server is running.`;
+    } else if (statusCode === 503) {
+      // In production, provide deployment guidance
+      details = `The backend API is not available. Make sure:\n1. The backend is deployed separately (Railway, Render, etc.)\n2. BACKEND_API_URL is set correctly in Vercel environment variables\n3. The backend URL is: ${BACKEND_URL}`;
+    }
+    
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
+      { 
+        error: errorMessage,
+        details: details
+      },
+      { status: statusCode }
     )
   }
 }

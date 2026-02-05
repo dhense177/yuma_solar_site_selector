@@ -3,42 +3,53 @@ import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/types/supabase'
 
 export const updateSession = async (request: NextRequest) => {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+  try {
+    // Check for required environment variables
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            request.cookies.set(name, value)
-          )
-          supabaseResponse = NextResponse.next({
-            request,
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('Missing Supabase environment variables')
+      // Return a response without Supabase auth if env vars are missing
+      return NextResponse.next({ request })
     }
-  )
 
-  // IMPORTANT: Avoid writing any logic between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
+    let supabaseResponse = NextResponse.next({
+      request,
+    })
 
-  // Refresh session if expired - required for Server Components
-  // https://supabase.com/docs/guides/auth/server-side/nextjs
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const supabase = createServerClient<Database>(
+      supabaseUrl,
+      supabaseAnonKey,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              request.cookies.set(name, value)
+            )
+            supabaseResponse = NextResponse.next({
+              request,
+            })
+            cookiesToSet.forEach(({ name, value, options }) =>
+              supabaseResponse.cookies.set(name, value, options)
+            )
+          },
+        },
+      }
+    )
+
+    // IMPORTANT: Avoid writing any logic between createServerClient and
+    // supabase.auth.getUser(). A simple mistake could make it very hard to debug
+    // issues with users being randomly logged out.
+
+    // Refresh session if expired - required for Server Components
+    // https://supabase.com/docs/guides/auth/server-side/nextjs
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
   // Optional: Add authentication protection for specific routes
   // Uncomment the following block if you want to protect all routes except login/auth
@@ -65,5 +76,10 @@ export const updateSession = async (request: NextRequest) => {
   // If this is not done, you may be causing the browser and server to go out
   // of sync and terminate the user's session prematurely.
 
-  return supabaseResponse
+    return supabaseResponse
+  } catch (error) {
+    console.error('Middleware error:', error)
+    // Return a response even if there's an error to prevent the middleware from crashing
+    return NextResponse.next({ request })
+  }
 }

@@ -80,9 +80,12 @@ const ChatInterface = ({ onParcelsFound }: ChatInterfaceProps) => {
 
       if (!response.ok) {
         let errorMessage = `HTTP error! status: ${response.status}`;
+        let errorDetails: any = null;
+        
         try {
           const errorData = await response.json();
           errorMessage = errorData.detail || errorData.error || errorMessage;
+          errorDetails = errorData.details || errorData;
           console.error('API error response:', errorData);
         } catch (e) {
           // Response is not JSON, try to get text
@@ -95,8 +98,17 @@ const ChatInterface = ({ onParcelsFound }: ChatInterfaceProps) => {
             errorMessage = `HTTP ${response.status}: ${response.statusText || 'Unknown error'}`;
           }
         }
+        
+        // Check for specific error codes
+        if (response.status === 503 || response.status === 502) {
+          errorMessage = `Backend server is not available (${response.status}). Make sure the backend is running on port 8000.`;
+        }
+        
         console.error('API error:', errorMessage);
-        throw new Error(errorMessage);
+        const error = new Error(errorMessage);
+        (error as any).status = response.status;
+        (error as any).details = errorDetails;
+        throw error;
       }
 
       // Handle streaming response (Server-Sent Events)
@@ -208,22 +220,52 @@ const ChatInterface = ({ onParcelsFound }: ChatInterfaceProps) => {
       console.error('Error searching parcels:', error);
       
       let errorMessage = "Failed to search for parcels. Please try again.";
+      let helpfulMessage = "";
       
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        errorMessage = `Cannot connect to backend API at ${API_BASE_URL}. Make sure the backend server is running.`;
+      // Check for specific error types
+      if (error instanceof TypeError && (error.message.includes('fetch') || error.message.includes('Failed to fetch'))) {
+        errorMessage = "Cannot connect to the backend server.";
+        // Check if we're in production (Vercel) or development
+        const isProduction = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+        if (isProduction) {
+          helpfulMessage = `The backend API is not available. This is a production deployment issue:\n\n1. The backend must be deployed separately (Railway, Render, Fly.io, etc.)\n2. BACKEND_API_URL must be set in Vercel environment variables\n3. Check VERCEL_DEPLOYMENT.md for deployment instructions`;
+        } else {
+          helpfulMessage = `The backend API at ${API_BASE_URL || 'http://localhost:8000'} is not reachable. Please make sure:\n\n1. The backend server is running (check terminal where you started it)\n2. The backend is running on port 8000\n3. Your .env.local has BACKEND_API_URL set correctly\n\nTo start the backend, run: cd backend && python api_server.py`;
+        }
       } else if (error instanceof Error) {
         errorMessage = error.message;
+        // Check if it's a connection error from the API route
+        if (error.message.includes('Cannot connect to backend') || 
+            error.message.includes('503') || 
+            error.message.includes('502') ||
+            (error as any).status === 503 ||
+            (error as any).status === 502) {
+          const isProduction = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+          if (isProduction) {
+            helpfulMessage = "The backend API is not available. Make sure the backend is deployed separately and BACKEND_API_URL is set in Vercel. See VERCEL_DEPLOYMENT.md for details.";
+          } else {
+            helpfulMessage = "The backend server is not running. Start it with: cd backend && python api_server.py";
+          }
+        }
+        // Include details if available
+        if ((error as any).details) {
+          const details = typeof (error as any).details === 'string' 
+            ? (error as any).details 
+            : JSON.stringify((error as any).details);
+          helpfulMessage = (helpfulMessage ? helpfulMessage + '\n\n' : '') + details;
+        }
       }
       
       toast({
-        title: "Error",
-        description: errorMessage,
+        title: "Connection Error",
+        description: errorMessage + (helpfulMessage ? `\n\n${helpfulMessage}` : ''),
         variant: "destructive",
+        duration: 10000, // Show longer for connection errors
       });
       
       const assistantErrorMessage: Message = {
         role: "assistant",
-        content: `I encountered an error: ${errorMessage}`
+        content: `I encountered an error: ${errorMessage}${helpfulMessage ? `\n\n${helpfulMessage}` : ''}`
       };
       setMessages(prev => [...prev, assistantErrorMessage]);
     } finally {
@@ -277,7 +319,7 @@ const ChatInterface = ({ onParcelsFound }: ChatInterfaceProps) => {
               />
               <h3 className="text-lg font-semibold mb-1">Find Parcels For Your Solar Project</h3>
               <p className="text-sm text-muted-foreground mb-0 text-left">
-                Use suggested prompts below or ask your own question. Specify filters using precise language (i.e. "20+ acres" instead of "large parcels").
+                Use suggested prompts below or ask your own question. Specify filters using precise language (i.e. &quot;20+ acres&quot; instead of &quot;large parcels&quot;).
               </p>
             </div>
             <div className="grid gap-2 -mt-2">
