@@ -82,15 +82,41 @@ python-multipart>=0.0.6
 In the Render dashboard, go to your service → **Environment** tab, and add:
 
 **Required:**
+
+**Option 1: SUPABASE_URL (Recommended)**
+
 ```
-SUPABASE_URL=postgresql://postgres:[password]@[host]:5432/postgres
-# OR use individual variables:
-DB_HOST=your-db-host
+SUPABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+```
+
+**⚠️ IMPORTANT:** 
+- Replace `[YOUR-PASSWORD]` with your actual Supabase database password
+- Replace `[PROJECT-REF]` with your Supabase project reference
+- The format MUST include:
+  - `postgresql://` (or `postgres://` - will be auto-converted)
+  - Port number `:5432` (required!)
+  - Database name `/postgres` (required!)
+
+**How to get the correct connection string:**
+1. Go to Supabase Dashboard → Your Project
+2. Go to **Settings** → **Database**
+3. Scroll to **Connection string** section
+4. Copy the **URI** connection string (not Session mode or Transaction mode)
+5. It should look like: `postgresql://postgres.xxxxx:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres`
+6. **Note:** If using connection pooling (port 6543), that's fine. If using direct connection (port 5432), that's also fine.
+
+**Option 2: Individual Database Variables**
+
+```
+DB_HOST=db.your-project.supabase.co
 DB_USER=postgres
 DB_PASSWORD=your-password
 DB_NAME=postgres
 DB_PORT=5432
+```
 
+**Also Required:**
+```
 OPENAI_API_KEY=your-openai-api-key
 ```
 
@@ -166,6 +192,13 @@ If you're on the free tier, you can use a service like [cron-job.org](https://cr
 - ✅ **Solution**: Use `pip install -r requirements.txt` as the Build Command (NOT `pip install -e .`)
 - Make sure `requirements.txt` exists in the `backend/` directory
 - The `pyproject.toml` is in the root, so `pip install -e .` won't work from the backend directory
+
+**Error: "ValueError: invalid literal for int() with base 10: ''" or "port is empty"**
+- ✅ **Solution**: Your `SUPABASE_URL` is missing the port number
+- The connection string MUST include `:5432` (or `:6543` for connection pooling)
+- Format: `postgresql://postgres:password@host:5432/postgres`
+- Get the correct connection string from Supabase Dashboard → Settings → Database → Connection string (URI format)
+- Make sure to copy the FULL connection string including port and database name
 
 **Error: "Module not found"**
 - Make sure `Root Directory` is set to `backend`

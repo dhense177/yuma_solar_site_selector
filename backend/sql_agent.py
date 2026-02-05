@@ -61,11 +61,79 @@ if supabase_url:
     print("Using Supabase connection string")
     # Supabase connection string format: postgresql://postgres:[password]@[host]:5432/postgres
     # Ensure it uses postgresql+psycopg2:// for SQLAlchemy
+    
+    # Validate and fix the connection string
+    original_url = supabase_url
+    
+    # If it doesn't start with postgres:// or postgresql://, it's likely incomplete
+    if not (supabase_url.startswith("postgres://") or supabase_url.startswith("postgresql://")):
+        raise ValueError(
+            f"Invalid SUPABASE_URL format. Expected format: postgresql://postgres:password@host:port/database\n"
+            f"Got: {supabase_url[:50]}... (truncated for security)\n"
+            f"Please check your Render environment variables."
+        )
+    
+    # Convert postgres:// to postgresql+psycopg2://
     if supabase_url.startswith("postgres://"):
         supabase_url = supabase_url.replace("postgres://", "postgresql+psycopg2://", 1)
-    elif not supabase_url.startswith("postgresql"):
-        # If it doesn't start with postgresql://, add the prefix
-        supabase_url = f"postgresql+psycopg2://{supabase_url}"
+    elif supabase_url.startswith("postgresql://"):
+        # Add psycopg2 driver if not present
+        if "+psycopg2" not in supabase_url:
+            supabase_url = supabase_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    
+    # Validate and fix URL components
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(supabase_url)
+        
+        # Check for missing port (None or empty string in netloc)
+        # urlparse sets port to None if not present, but netloc might have empty port (host:)
+        netloc_has_empty_port = ':' in parsed.netloc and (not parsed.port or parsed.netloc.endswith(':'))
+        if not parsed.port or netloc_has_empty_port:
+            # Default to 5432 if port is missing
+            print("Warning: Port not specified in SUPABASE_URL, defaulting to 5432")
+            # Reconstruct URL with default port
+            netloc = parsed.netloc.rstrip(':')  # Remove trailing colon if present
+            if '@' in netloc:
+                # Format: user:pass@host -> user:pass@host:5432
+                auth, host = netloc.split('@', 1)
+                # Remove any existing port from host
+                if ':' in host:
+                    host = host.split(':')[0]
+                supabase_url = f"{parsed.scheme}://{auth}@{host}:5432{parsed.path or '/postgres'}"
+            else:
+                # Format: host -> host:5432
+                # Remove any existing port
+                if ':' in netloc:
+                    netloc = netloc.split(':')[0]
+                supabase_url = f"{parsed.scheme}://{netloc}:5432{parsed.path or '/postgres'}"
+        
+        # Check for missing database
+        if not parsed.path or parsed.path == "/":
+            print("Warning: Database not specified in SUPABASE_URL, defaulting to postgres")
+            if supabase_url.endswith("/"):
+                supabase_url = supabase_url + "postgres"
+            elif not supabase_url.endswith("postgres"):
+                supabase_url = supabase_url + "/postgres"
+        
+        # Re-parse to validate
+        parsed = urlparse(supabase_url)
+        if not parsed.hostname:
+            raise ValueError("SUPABASE_URL missing hostname after parsing")
+        
+        print(f"Creating database engine (host: {parsed.hostname}, port: {parsed.port or 5432}, database: {parsed.path.lstrip('/') or 'postgres'})")
+    except Exception as e:
+        raise ValueError(
+            f"Invalid SUPABASE_URL format: {str(e)}\n"
+            f"Expected format: postgresql://postgres:password@host:5432/postgres\n"
+            f"Your URL starts with: {original_url[:30]}...\n"
+            f"Please check your Render environment variables. Common issues:\n"
+            f"1. Missing port (should be :5432)\n"
+            f"2. Missing database name (should end with /postgres)\n"
+            f"3. Incorrect format\n"
+            f"Get the correct connection string from Supabase Dashboard → Settings → Database → Connection string (URI format)"
+        ) from e
+    
     engine = create_engine(supabase_url)
 elif os.getenv("DATABASE_URL"):
     print("Using DATABASE_URL connection string")
