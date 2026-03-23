@@ -1,6 +1,6 @@
 
 <div align="center">
-  <img src="frontend/public/yuma.png" alt="Yuma Logo" width="200"/>
+  <img src="public/yuma.png" alt="Yuma Logo" width="200"/>
   
   <h2>Utility-Scale Solar Site Selection Assistant</h2>
 </div>
@@ -41,7 +41,7 @@ Yuma is an intelligent, production-grade text-to-SQL system for finding and anal
 ### System Architecture Diagram
 
 <div align="center">
-  <img src="frontend/public/solar_site_selection_arch.png" alt="Yuma System Architecture" width="800"/>
+  <img src="public/solar_site_selection_arch.png" alt="Yuma System Architecture" width="800"/>
 </div>
 
 ### Backend (`backend/`)
@@ -69,7 +69,7 @@ Yuma is an intelligent, production-grade text-to-SQL system for finding and anal
 
 **LangGraph Workflow:**
 <div align="center">
-  <img src="frontend/public/langgraph_flow.png" alt="AI Flow Diagram" width="800"/>
+  <img src="public/langgraph_flow.png" alt="AI Flow Diagram" width="800"/>
 </div>
 
 
